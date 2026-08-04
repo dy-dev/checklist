@@ -2,7 +2,7 @@
    Rôle unique : garder l'application accessible sans réseau.
    Changer CACHE à chaque mise à jour de index.html pour forcer le rafraîchissement. */
 
-const CACHE = "valise-v1";
+const CACHE = "valise-v2";
 const FILES = ["./", "./index.html", "./sw.js"];
 
 // Mise en cache initiale, puis activation immédiate.
