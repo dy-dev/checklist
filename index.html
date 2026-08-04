@@ -1,0 +1,2722 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#141218">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Checklists de voyage hors ligne">
+<title>Valise</title>
+
+<style>
+/* =========================================================================
+   1. TOKENS  —  palette Material Design 3 (sombre par défaut + variante claire)
+   ========================================================================= */
+:root{
+  /* Couleurs — thème sombre (défaut) */
+  --surface:            #141218;
+  --surface-1:          #1D1B20;
+  --surface-2:          #211F26;
+  --surface-3:          #2B2930;
+  --surface-4:          #36343B;
+  --on-surface:         #E6E0E9;
+  --on-surface-var:     #CAC4D0;
+  --outline:            #49454F;
+  --outline-var:        #322F37;
+
+  --primary:            #D0BCFF;
+  --on-primary:         #381E72;
+  --primary-container:  #4F378B;
+  --on-primary-cont:    #EADDFF;
+
+  --secondary:          #7FD1AE;
+  --on-secondary:       #003825;
+
+  --error:              #F2B8B5;
+  --on-error:           #601410;
+  --error-container:    #8C1D18;
+
+  --scrim:              rgba(0,0,0,.6);
+
+  /* Dimensions pilotées par les Paramètres */
+  --check-size:         30px;   /* taille des cases à cocher */
+  --font-scale:         1;      /* échelle du texte */
+  --row-pad:            14px;   /* densité des lignes (mode compact / normal) */
+
+  /* Constantes */
+  --radius-xl:          28px;
+  --radius-l:           20px;
+  --radius-m:           14px;
+  --radius-s:           10px;
+  --bar-h:              64px;
+  --ease:               cubic-bezier(.2,.0,.0,1);
+  --safe-b:             env(safe-area-inset-bottom, 0px);
+  --safe-t:             env(safe-area-inset-top, 0px);
+}
+
+/* Thème clair — activé par data-theme="light" sur <html> */
+html[data-theme="light"]{
+  --surface:            #FEF7FF;
+  --surface-1:          #F7F2FA;
+  --surface-2:          #F3EDF7;
+  --surface-3:          #ECE6F0;
+  --surface-4:          #E6E0E9;
+  --on-surface:         #1D1B20;
+  --on-surface-var:     #49454F;
+  --outline:            #CAC4D0;
+  --outline-var:        #E7E0EC;
+
+  --primary:            #6750A4;
+  --on-primary:         #FFFFFF;
+  --primary-container:  #EADDFF;
+  --on-primary-cont:    #21005D;
+
+  --secondary:          #006B54;
+  --on-secondary:       #FFFFFF;
+
+  --error:              #B3261E;
+  --on-error:           #FFFFFF;
+  --error-container:    #F9DEDC;
+
+  --scrim:              rgba(0,0,0,.4);
+}
+
+/* =========================================================================
+   2. BASE
+   ========================================================================= */
+*,*::before,*::after{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html,body{ height:100%; }
+
+body{
+  margin:0;
+  background:var(--surface);
+  color:var(--on-surface);
+  font-family:"Roboto","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  font-size:calc(16px * var(--font-scale));
+  line-height:1.45;
+  overscroll-behavior-y:none;
+  -webkit-text-size-adjust:100%;
+}
+
+button,input,select,textarea{ font:inherit; color:inherit; }
+button{ background:none; border:0; cursor:pointer; }
+ul{ margin:0; padding:0; list-style:none; }
+h1,h2,h3,p{ margin:0; }
+
+/* Accessibilité clavier */
+:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
+
+/* Respect de la préférence système "moins d'animations" */
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}
+
+/* =========================================================================
+   2b. BANDEAU D'ALERTE STOCKAGE
+   ========================================================================= */
+#storage-warning{
+  display:none;
+  position:fixed; top:0; left:0; right:0;
+  z-index:40;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;
+  background:var(--error-container);
+  color:#FFF;
+  font-size:.8em; line-height:1.35;
+}
+#storage-warning.show{ display:block; }
+#storage-warning b{ display:block; font-size:1.08em; margin-bottom:2px; }
+#storage-warning .row{ display:flex; align-items:flex-start; gap:12px; }
+#storage-warning .txt{ flex:1 1 auto; }
+#storage-warning button{
+  flex:0 0 auto;
+  border:1px solid rgba(255,255,255,.55);
+  border-radius:99px;
+  padding:6px 12px;
+  color:#FFF; font-size:.95em; font-weight:600;
+}
+/* Quand le bandeau est visible, les barres supérieures descendent d'autant. */
+body.has-warning{ --safe-t:76px; }
+body.has-warning #storage-warning{ padding-top:calc(10px + env(safe-area-inset-top,0px)); }
+
+/* =========================================================================
+   3. STRUCTURE D'ÉCRAN  (barre supérieure / contenu défilant / FAB)
+   ========================================================================= */
+.screen{
+  display:none;
+  flex-direction:column;
+  position:fixed; inset:0;
+}
+.screen.active{ display:flex; }
+
+/* --- Barre supérieure --- */
+.topbar{
+  flex:0 0 auto;
+  padding-top:var(--safe-t);
+  background:var(--surface-2);
+  border-bottom:1px solid var(--outline-var);
+  z-index:5;
+}
+.topbar-row{
+  height:var(--bar-h);
+  display:flex; align-items:center; gap:4px;
+  padding:0 6px;
+}
+.topbar h1{
+  flex:1 1 auto;
+  font-size:1.28em; font-weight:500;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding:0 6px;
+}
+.icon-btn{
+  flex:0 0 auto;
+  width:46px; height:46px;
+  display:grid; place-items:center;
+  border-radius:50%;
+  color:var(--on-surface-var);
+  transition:background .18s var(--ease);
+}
+.icon-btn:active{ background:var(--surface-4); }
+.icon-btn svg{ width:24px; height:24px; fill:currentColor; }
+
+/* --- Zone défilante --- */
+.content{
+  flex:1 1 auto;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  padding:12px 12px calc(120px + var(--safe-b));
+}
+
+/* --- Bouton d'action flottant --- */
+.fab{
+  position:absolute;
+  right:18px; bottom:calc(22px + var(--safe-b));
+  height:60px; min-width:60px;
+  padding:0 22px;
+  display:flex; align-items:center; gap:10px;
+  background:var(--primary-container);
+  color:var(--on-primary-cont);
+  border-radius:20px;
+  font-size:.95em; font-weight:600;
+  box-shadow:0 6px 18px rgba(0,0,0,.45);
+  transition:transform .18s var(--ease), box-shadow .18s var(--ease);
+  z-index:6;
+}
+.fab:active{ transform:scale(.94); }
+.fab svg{ width:24px; height:24px; fill:currentColor; }
+
+/* =========================================================================
+   4. CARTES DE CHECKLIST  (écran d'accueil)
+   ========================================================================= */
+.trip-card{
+  display:flex; align-items:center; gap:14px;
+  background:var(--surface-2);
+  border-radius:var(--radius-l);
+  padding:16px;
+  margin-bottom:12px;
+  transition:transform .16s var(--ease), background .16s var(--ease);
+  animation:rise .28s var(--ease) both;
+}
+.trip-card:active{ transform:scale(.985); background:var(--surface-3); }
+
+.trip-emoji{
+  flex:0 0 auto;
+  width:52px; height:52px;
+  display:grid; place-items:center;
+  font-size:1.6em;
+  background:var(--surface-4);
+  border-radius:16px;
+}
+.trip-main{ flex:1 1 auto; min-width:0; }
+.trip-name{
+  font-size:1.06em; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.trip-sub{ font-size:.8em; color:var(--on-surface-var); margin-top:2px; }
+.trip-bar{
+  height:6px; margin-top:9px;
+  background:var(--surface-4);
+  border-radius:99px; overflow:hidden;
+}
+.trip-bar > i{
+  display:block; height:100%; width:0;
+  background:var(--primary);
+  border-radius:99px;
+  transition:width .5s var(--ease);
+}
+
+/* =========================================================================
+   5. EN-TÊTE DE CHECKLIST  (progression, recherche, filtres)
+   ========================================================================= */
+.panel{
+  background:var(--surface-1);
+  border-bottom:1px solid var(--outline-var);
+  padding:10px 12px 12px;
+  flex:0 0 auto;
+}
+
+/* Progression */
+.progress-line{
+  display:flex; align-items:baseline; justify-content:space-between;
+  font-size:.86em; color:var(--on-surface-var);
+  margin-bottom:7px;
+}
+.progress-line b{ color:var(--on-surface); font-size:1.15em; }
+.progress-track{
+  height:10px;
+  background:var(--surface-3);
+  border-radius:99px;
+  overflow:hidden;
+}
+.progress-fill{
+  display:block; height:100%; width:0;
+  background:linear-gradient(90deg,var(--primary-container),var(--primary));
+  border-radius:99px;
+  transition:width .55s var(--ease);
+}
+.progress-fill.full{ background:var(--secondary); }
+
+/* Champ de recherche */
+.search{
+  display:flex; align-items:center; gap:8px;
+  margin-top:12px;
+  background:var(--surface-3);
+  border-radius:99px;
+  padding:0 8px 0 14px;
+  height:46px;
+}
+.search svg{ width:20px; height:20px; fill:var(--on-surface-var); flex:0 0 auto; }
+.search input{
+  flex:1 1 auto; min-width:0;
+  background:none; border:0; outline:none;
+  font-size:.95em;
+}
+.search input::placeholder{ color:var(--on-surface-var); }
+.search button{
+  width:34px; height:34px; border-radius:50%;
+  display:none; place-items:center; color:var(--on-surface-var);
+}
+.search.filled button{ display:grid; }
+
+/* Filtres (chips) */
+.chips{ display:flex; gap:8px; margin-top:10px; }
+.chip{
+  flex:1 1 0;
+  height:38px;
+  border:1px solid var(--outline);
+  border-radius:10px;
+  font-size:.85em; font-weight:500;
+  color:var(--on-surface-var);
+  transition:background .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease);
+}
+.chip[aria-pressed="true"]{
+  background:var(--primary-container);
+  border-color:transparent;
+  color:var(--on-primary-cont);
+}
+
+/* =========================================================================
+   6. SECTIONS ET ÉLÉMENTS
+   ========================================================================= */
+.section{
+  background:var(--surface-2);
+  border-radius:var(--radius-l);
+  margin-bottom:12px;
+  overflow:hidden;
+}
+
+.section-head{
+  display:flex; align-items:center; gap:6px;
+  padding:12px 6px 12px 14px;
+  width:100%;
+}
+.section-title{
+  flex:1 1 auto; min-width:0;
+  display:flex; align-items:center; gap:10px;
+  text-align:left;
+  padding:2px 0;
+}
+.section-title .caret{
+  width:22px; height:22px; flex:0 0 auto;
+  fill:var(--on-surface-var);
+  transition:transform .25s var(--ease);
+}
+.section.collapsed .caret{ transform:rotate(-90deg); }
+.section-name{
+  font-size:1em; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.section-count{
+  flex:0 0 auto;
+  font-size:.78em; font-weight:600;
+  color:var(--on-surface-var);
+  background:var(--surface-4);
+  border-radius:99px;
+  padding:3px 10px;
+}
+.section-count.done{ background:var(--primary-container); color:var(--on-primary-cont); }
+
+.section-body{ display:block; }
+.section.collapsed .section-body{ display:none; }
+
+/* --- Ligne d'élément --- */
+.item{
+  display:flex; align-items:center; gap:12px;
+  padding:var(--row-pad) 6px var(--row-pad) 14px;
+  border-top:1px solid var(--outline-var);
+  transition:background .15s var(--ease);
+}
+.item:active{ background:var(--surface-3); }
+
+.check{
+  flex:0 0 auto;
+  width:var(--check-size); height:var(--check-size);
+  border:2.5px solid var(--outline);
+  border-radius:9px;
+  display:grid; place-items:center;
+  transition:background .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+}
+.check svg{
+  width:78%; height:78%;
+  fill:none; stroke:var(--on-primary); stroke-width:3.4;
+  stroke-linecap:round; stroke-linejoin:round;
+  stroke-dasharray:26; stroke-dashoffset:26;
+  transition:stroke-dashoffset .24s var(--ease);
+}
+.item.checked .check{ background:var(--primary); border-color:var(--primary); }
+.item.checked .check svg{ stroke-dashoffset:0; }
+.item.checked .check{ animation:pop .26s var(--ease); }
+
+.item-label{
+  flex:1 1 auto; min-width:0;
+  display:flex; align-items:center; gap:8px;
+  text-align:left;
+  padding:2px 0;
+}
+.item-name{
+  flex:1 1 auto;
+  font-size:.97em;
+  overflow-wrap:anywhere;
+  transition:color .2s var(--ease);
+}
+.item.checked .item-name{
+  color:var(--on-surface-var);
+  text-decoration:line-through;
+  text-decoration-color:var(--outline);
+}
+.qty{
+  flex:0 0 auto;
+  font-size:.76em; font-weight:700;
+  background:var(--surface-4);
+  color:var(--on-surface-var);
+  border-radius:8px;
+  padding:2px 8px;
+}
+.item .icon-btn{ width:40px; height:40px; }
+.item .icon-btn svg{ width:20px; height:20px; }
+
+/* Mode compact : lignes resserrées */
+body.compact{ --row-pad:8px; }
+body.compact .section-head{ padding-top:9px; padding-bottom:9px; }
+body.compact .trip-card{ padding:12px; }
+
+/* Résultat vide */
+.empty{
+  text-align:center;
+  padding:56px 24px;
+  color:var(--on-surface-var);
+}
+.empty .big{ font-size:2.6em; margin-bottom:10px; }
+.empty p{ font-size:.92em; }
+
+/* =========================================================================
+   7. FEUILLES MODALES, BOÎTES DE DIALOGUE, SNACKBAR
+   ========================================================================= */
+.scrim{
+  position:fixed; inset:0;
+  background:var(--scrim);
+  opacity:0; pointer-events:none;
+  transition:opacity .22s var(--ease);
+  z-index:20;
+}
+.scrim.open{ opacity:1; pointer-events:auto; }
+
+/* Feuille glissant depuis le bas */
+.sheet{
+  position:fixed; left:0; right:0; bottom:0;
+  max-height:86vh;
+  display:flex; flex-direction:column;
+  background:var(--surface-2);
+  border-radius:var(--radius-xl) var(--radius-xl) 0 0;
+  padding-bottom:var(--safe-b);
+  transform:translateY(110%);
+  transition:transform .3s var(--ease);
+  z-index:21;
+}
+.sheet.open{ transform:translateY(0); }
+.sheet .grip{
+  width:34px; height:4px; border-radius:99px;
+  background:var(--outline);
+  margin:12px auto 4px;
+  flex:0 0 auto;
+}
+.sheet h2{
+  font-size:1.1em; font-weight:600;
+  padding:10px 22px 6px;
+  flex:0 0 auto;
+}
+.sheet .sheet-body{
+  overflow-y:auto;
+  padding:6px 14px 18px;
+}
+
+/* Ligne d'action dans une feuille */
+.action{
+  display:flex; align-items:center; gap:16px;
+  width:100%;
+  padding:15px 12px;
+  border-radius:var(--radius-m);
+  text-align:left;
+  font-size:.97em;
+}
+.action:active{ background:var(--surface-3); }
+.action svg{ width:22px; height:22px; fill:var(--on-surface-var); flex:0 0 auto; }
+.action .sub{ display:block; font-size:.78em; color:var(--on-surface-var); margin-top:2px; }
+.action.danger, .action.danger svg{ color:var(--error); fill:var(--error); }
+.divider{ height:1px; background:var(--outline-var); margin:8px 12px; }
+
+/* Boîte de dialogue centrée */
+.dialog{
+  position:fixed;
+  left:50%; top:50%;
+  width:min(94vw,420px);
+  transform:translate(-50%,-46%) scale(.94);
+  opacity:0; pointer-events:none;
+  background:var(--surface-3);
+  border-radius:var(--radius-xl);
+  padding:24px;
+  z-index:22;
+  transition:opacity .2s var(--ease), transform .2s var(--ease);
+  max-height:88vh; overflow-y:auto;
+}
+.dialog.open{ opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
+.dialog h2{ font-size:1.2em; font-weight:600; margin-bottom:10px; }
+.dialog p{ font-size:.93em; color:var(--on-surface-var); }
+.dialog-actions{
+  display:flex; justify-content:flex-end; gap:8px;
+  margin-top:22px;
+}
+.btn-text{
+  padding:12px 18px;
+  border-radius:99px;
+  color:var(--primary);
+  font-weight:600; font-size:.93em;
+}
+.btn-text:active{ background:var(--surface-4); }
+.btn-text.danger{ color:var(--error); }
+
+/* Champs de formulaire */
+.field{ margin-top:16px; }
+.field label{
+  display:block;
+  font-size:.78em; font-weight:600;
+  color:var(--on-surface-var);
+  margin-bottom:6px;
+  letter-spacing:.02em;
+}
+.field input[type=text], .field input[type=number], .field select{
+  width:100%;
+  height:52px;
+  background:var(--surface-1);
+  border:1px solid var(--outline);
+  border-radius:var(--radius-m);
+  padding:0 14px;
+  outline:none;
+  transition:border-color .16s var(--ease);
+}
+.field input:focus, .field select:focus{ border-color:var(--primary); }
+.hint{ font-size:.78em; color:var(--on-surface-var); margin-top:8px; }
+
+/* Snackbar */
+.snackbar{
+  position:fixed;
+  left:14px; right:14px;
+  bottom:calc(24px + var(--safe-b));
+  background:var(--surface-4);
+  color:var(--on-surface);
+  border-radius:var(--radius-m);
+  padding:15px 18px;
+  font-size:.9em;
+  box-shadow:0 6px 22px rgba(0,0,0,.5);
+  transform:translateY(140%);
+  transition:transform .3s var(--ease);
+  z-index:30;
+}
+.snackbar.open{ transform:translateY(0); }
+
+/* =========================================================================
+   8. ÉCRAN PARAMÈTRES
+   ========================================================================= */
+.settings-group{
+  background:var(--surface-2);
+  border-radius:var(--radius-l);
+  padding:6px;
+  margin-bottom:14px;
+}
+.settings-group > h3{
+  font-size:.78em; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:var(--primary);
+  padding:14px 14px 8px;
+}
+.setting{
+  display:flex; align-items:center; gap:14px;
+  padding:14px;
+  border-radius:var(--radius-m);
+}
+.setting .txt{ flex:1 1 auto; min-width:0; }
+.setting .txt b{ display:block; font-size:.96em; font-weight:500; }
+.setting .txt span{ display:block; font-size:.79em; color:var(--on-surface-var); margin-top:2px; }
+
+/* Interrupteur */
+.switch{
+  flex:0 0 auto;
+  width:52px; height:32px;
+  border-radius:99px;
+  background:var(--surface-4);
+  border:2px solid var(--outline);
+  position:relative;
+  transition:background .2s var(--ease), border-color .2s var(--ease);
+}
+.switch::after{
+  content:"";
+  position:absolute; top:50%; left:6px;
+  width:16px; height:16px;
+  border-radius:50%;
+  background:var(--outline);
+  transform:translate(0,-50%);
+  transition:transform .22s var(--ease), width .22s var(--ease), height .22s var(--ease), background .22s var(--ease), left .22s var(--ease);
+}
+.switch[aria-checked="true"]{ background:var(--primary); border-color:var(--primary); }
+.switch[aria-checked="true"]::after{
+  width:24px; height:24px; left:2px;
+  background:var(--on-primary);
+  transform:translate(20px,-50%);
+}
+
+/* Sélecteur segmenté */
+.segmented{
+  display:flex;
+  border:1px solid var(--outline);
+  border-radius:99px;
+  overflow:hidden;
+  flex:0 0 auto;
+}
+.segmented button{
+  padding:9px 14px;
+  font-size:.82em; font-weight:500;
+  color:var(--on-surface-var);
+  transition:background .16s var(--ease), color .16s var(--ease);
+}
+.segmented button[aria-pressed="true"]{ background:var(--primary-container); color:var(--on-primary-cont); }
+.segmented button + button{ border-left:1px solid var(--outline); }
+
+.about{
+  text-align:center;
+  font-size:.78em;
+  color:var(--on-surface-var);
+  padding:10px 0 30px;
+}
+
+/* =========================================================================
+   9. FEUILLE DE RÉORGANISATION
+   ========================================================================= */
+.reorder-row{
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface-3);
+  border-radius:var(--radius-m);
+  padding:8px 8px 8px 16px;
+  margin-bottom:8px;
+}
+.reorder-row .nm{
+  flex:1 1 auto; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size:.94em;
+}
+.reorder-row .icon-btn{ width:42px; height:42px; }
+.reorder-row .icon-btn[disabled]{ opacity:.28; }
+
+/* =========================================================================
+   10. ANIMATIONS
+   ========================================================================= */
+@keyframes rise{
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:none; }
+}
+@keyframes pop{
+  0%{ transform:scale(1); }
+  45%{ transform:scale(1.22); }
+  100%{ transform:scale(1); }
+}
+
+/* =========================================================================
+   11. VUE D'IMPRESSION  (export PDF via l'impression du système)
+   ========================================================================= */
+#printArea{ display:none; }
+
+@media print{
+  body{ background:#fff; color:#000; }
+  .screen,.fab,.scrim,.sheet,.dialog,.snackbar{ display:none !important; }
+  #printArea{
+    display:block !important;
+    padding:0;
+    font-family:Georgia,"Times New Roman",serif;
+    color:#000;
+  }
+  #printArea h1{ font-size:22pt; margin-bottom:2pt; }
+  #printArea .meta{ font-size:10pt; color:#555; margin-bottom:16pt; }
+  #printArea h2{
+    font-size:13pt; margin:14pt 0 4pt;
+    border-bottom:1px solid #000; padding-bottom:2pt;
+    page-break-after:avoid;
+  }
+  #printArea li{ font-size:11pt; padding:2pt 0; page-break-inside:avoid; }
+  #printArea .box{ display:inline-block; width:10pt; }
+  @page{ margin:14mm; }
+}
+
+/* =========================================================================
+   12. TABLETTE / GRAND ÉCRAN
+   ========================================================================= */
+@media (min-width: 720px){
+  .content{ max-width:760px; margin:0 auto; width:100%; }
+  .panel > div{ max-width:760px; margin:0 auto; }
+  .topbar-row{ max-width:772px; margin:0 auto; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- =========================================================================
+     ÉCRAN 1 — ACCUEIL : liste des checklists
+     ========================================================================= -->
+<!-- Bandeau affiché uniquement si le stockage local ne fonctionne pas -->
+<div id="storage-warning" role="alert">
+  <div class="row">
+    <div class="txt">
+      <b id="warn-title"></b>
+      <span id="warn-text"></span>
+    </div>
+    <button id="warn-action"></button>
+  </div>
+</div>
+
+<div class="screen active" id="screen-home">
+  <header class="topbar">
+    <div class="topbar-row">
+      <h1>Mes checklists</h1>
+      <button class="icon-btn" id="btn-open-settings" aria-label="Paramètres">
+        <svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5m7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66a.5.5 0 0 0-.12.64l2 3.46c.14.24.44.32.61.22l2.49-1c.52.39 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.17.1.47.02.61-.22l2-3.46a.5.5 0 0 0-.12-.64z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="content" id="home-list"></main>
+
+  <button class="fab" id="btn-new-trip">
+    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+    Checklist
+  </button>
+</div>
+
+<!-- =========================================================================
+     ÉCRAN 2 — DÉTAIL D'UNE CHECKLIST
+     ========================================================================= -->
+<div class="screen" id="screen-list">
+  <header class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" id="btn-back" aria-label="Retour">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+      </button>
+      <h1 id="list-title">Checklist</h1>
+      <button class="icon-btn" id="btn-list-menu" aria-label="Actions">
+        <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2m0 2a2 2 0 1 0 2 2 2 2 0 0 0-2-2m0 6a2 2 0 1 0 2 2 2 2 0 0 0-2-2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Progression + recherche + filtres -->
+  <div class="panel">
+    <div>
+      <div class="progress-line">
+        <span id="progress-text">0 / 0 objets préparés</span>
+        <b id="progress-pct">0 %</b>
+      </div>
+      <div class="progress-track"><i class="progress-fill" id="progress-fill"></i></div>
+
+      <div class="search" id="search-wrap">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.49 4.49 0 0 1 9.5 14"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher un objet" autocomplete="off" enterkeyhint="search">
+        <button id="btn-clear-search" aria-label="Effacer la recherche">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+
+      <div class="chips" role="group" aria-label="Filtrer">
+        <button class="chip" data-filter="all"       aria-pressed="true">Tous</button>
+        <button class="chip" data-filter="checked"   aria-pressed="false">Cochés</button>
+        <button class="chip" data-filter="unchecked" aria-pressed="false">Non cochés</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="content" id="sections-host"></main>
+
+  <button class="fab" id="btn-add-item">
+    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+    Objet
+  </button>
+</div>
+
+<!-- =========================================================================
+     ÉCRAN 3 — PARAMÈTRES
+     ========================================================================= -->
+<div class="screen" id="screen-settings">
+  <header class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" id="btn-settings-back" aria-label="Retour">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+      </button>
+      <h1>Paramètres</h1>
+    </div>
+  </header>
+
+  <main class="content">
+
+    <div class="settings-group">
+      <h3>Apparence</h3>
+
+      <div class="setting">
+        <div class="txt"><b>Thème sombre</b><span>Économise la batterie sur écran OLED</span></div>
+        <button class="switch" id="set-theme" role="switch" aria-checked="true" aria-label="Thème sombre"></button>
+      </div>
+
+      <div class="setting">
+        <div class="txt"><b>Mode compact</b><span>Plus de lignes visibles à l'écran</span></div>
+        <button class="switch" id="set-compact" role="switch" aria-checked="false" aria-label="Mode compact"></button>
+      </div>
+
+      <div class="setting">
+        <div class="txt"><b>Taille des cases</b></div>
+        <div class="segmented" id="set-check-size">
+          <button data-v="s" aria-pressed="false">S</button>
+          <button data-v="m" aria-pressed="true">M</button>
+          <button data-v="l" aria-pressed="false">L</button>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="txt"><b>Taille du texte</b></div>
+        <div class="segmented" id="set-text-size">
+          <button data-v="s" aria-pressed="false">S</button>
+          <button data-v="m" aria-pressed="true">M</button>
+          <button data-v="l" aria-pressed="false">L</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Confirmations</h3>
+
+      <div class="setting">
+        <div class="txt"><b>Avant suppression</b><span>Demander avant de supprimer un objet ou une section</span></div>
+        <button class="switch" id="set-confirm-delete" role="switch" aria-checked="true" aria-label="Confirmer avant suppression"></button>
+      </div>
+
+      <div class="setting">
+        <div class="txt"><b>Avant réinitialisation</b><span>Demander avant de tout décocher</span></div>
+        <button class="switch" id="set-confirm-reset" role="switch" aria-checked="true" aria-label="Confirmer avant réinitialisation"></button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Démarrage</h3>
+
+      <div class="setting">
+        <div class="txt"><b>Ouvrir la dernière checklist</b><span>Reprendre directement là où vous vous êtes arrêté</span></div>
+        <button class="switch" id="set-open-last" role="switch" aria-checked="true" aria-label="Ouvrir la dernière checklist utilisée"></button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Données</h3>
+      <button class="action" id="set-export-all">
+        <svg viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7zm-6 .67 2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/></svg>
+        <span>Exporter toutes les données<span class="sub">Sauvegarde complète au format JSON</span></span>
+      </button>
+      <button class="action" id="set-import-all">
+        <svg viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7zM11 3v9.67L8.41 10.1 7 11.5l5 5 5-5-1.41-1.41L13 12.67V3z" transform="rotate(180 12 10)"/></svg>
+        <span>Importer une sauvegarde<span class="sub">Remplace les checklists existantes</span></span>
+      </button>
+      <button class="action" id="set-copy">
+        <svg viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m0 16H8V7h11z"/></svg>
+        <span>Copier les données<span class="sub">Dans le presse-papiers, sans fichier</span></span>
+      </button>
+      <button class="action" id="set-paste">
+        <svg viewBox="0 0 24 24"><path d="M19 2h-4.18C14.4.84 13.3 0 12 0S9.6.84 9.18 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2m-7 0a1 1 0 1 1-1 1 1 1 0 0 1 1-1m7 18H5V4h2v3h10V4h2z"/></svg>
+        <span>Coller des données<span class="sub">Restaure une sauvegarde copiée</span></span>
+      </button>
+      <div class="divider"></div>
+      <button class="action" id="set-install" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2m0 18H7V5h10z"/></svg>
+        <span>Installer l'application<span class="sub">Ajouter à l'écran d'accueil</span></span>
+      </button>
+      <button class="action danger" id="set-wipe">
+        <svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"/></svg>
+        <span>Effacer toutes les données<span class="sub">Retour à l'état d'origine</span></span>
+      </button>
+    </div>
+
+    <p class="about">Valise · fonctionne hors ligne · données stockées sur l'appareil</p>
+  </main>
+</div>
+
+<!-- =========================================================================
+     COUCHES MODALES
+     ========================================================================= -->
+<div class="scrim" id="scrim"></div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="grip"></div>
+  <h2 id="sheet-title"></h2>
+  <div class="sheet-body" id="sheet-body"></div>
+</div>
+
+<div class="dialog" id="dialog" role="dialog" aria-modal="true">
+  <h2 id="dialog-title"></h2>
+  <div id="dialog-body"></div>
+  <div class="dialog-actions" id="dialog-actions"></div>
+</div>
+
+<div class="snackbar" id="snackbar"></div>
+
+<!-- Sélecteur de fichier pour les imports (invisible) -->
+<input type="file" id="file-input" accept="application/json,.json" hidden>
+
+<!-- Zone rendue uniquement à l'impression -->
+<div id="printArea"></div>
+
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   OUTILS GÉNÉRIQUES
+   ========================================================================= */
+class Utils{
+  /** Identifiant court unique (suffisant pour un stockage local). */
+  static uid(){
+    return Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+  }
+  /** Échappe le texte destiné à être injecté dans du HTML. */
+  static esc(str){
+    return String(str)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+  /** Date du jour au format AAAA-MM-JJ (heure locale, pas UTC). */
+  static today(){
+    const d = new Date();
+    const p = n => String(n).padStart(2,"0");
+    return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate());
+  }
+  /** Normalise une chaîne pour la recherche : minuscules, sans accents. */
+  static norm(str){
+    return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  }
+  /** Retarde l'exécution d'une fonction tant qu'elle est rappelée. */
+  static debounce(fn, delay){
+    let t = null;
+    return function(){
+      const args = arguments;
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), delay);
+    };
+  }
+  /** Déplace un élément d'un tableau de `from` vers `to`. */
+  static move(arr, from, to){
+    if(to < 0 || to >= arr.length) return false;
+    arr.splice(to, 0, arr.splice(from,1)[0]);
+    return true;
+  }
+  /** Déclenche le téléchargement d'un contenu texte. */
+  static download(filename, text, mime){
+    const blob = new Blob([text], { type: (mime || "application/json") + ";charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  /** Nom de fichier sans caractère problématique. */
+  static slug(str){
+    return Utils.norm(str).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "checklist";
+  }
+}
+
+/* =========================================================================
+   MODÈLE DE DONNÉES
+   ========================================================================= */
+
+/** Un objet à emporter : nom, quantité facultative, état coché. */
+class Item{
+  constructor(name, qty, checked, id){
+    this.id      = id || Utils.uid();
+    this.name    = name;
+    this.qty     = (qty === undefined || qty === null || qty === "") ? null : Number(qty);
+    this.checked = !!checked;
+  }
+  toJSON(){ return { id:this.id, name:this.name, qty:this.qty, checked:this.checked }; }
+  static fromJSON(o){ return new Item(o.name, o.qty, o.checked, o.id); }
+}
+
+/** Un regroupement d'objets, pliable. */
+class Section{
+  constructor(name, items, collapsed, id){
+    this.id        = id || Utils.uid();
+    this.name      = name;
+    this.items     = items || [];
+    this.collapsed = !!collapsed;
+  }
+  get total(){ return this.items.length; }
+  get done(){ return this.items.reduce((n,it) => n + (it.checked ? 1 : 0), 0); }
+
+  addItem(name, qty){
+    const it = new Item(name, qty, false);
+    this.items.push(it);
+    return it;
+  }
+  removeItem(id){
+    const i = this.items.findIndex(x => x.id === id);
+    if(i >= 0) return this.items.splice(i,1)[0];
+    return null;
+  }
+  findItem(id){ return this.items.find(x => x.id === id) || null; }
+  indexOfItem(id){ return this.items.findIndex(x => x.id === id); }
+
+  toJSON(){
+    return {
+      id:this.id, name:this.name, collapsed:this.collapsed,
+      items:this.items.map(i => i.toJSON())
+    };
+  }
+  static fromJSON(o){
+    return new Section(o.name, (o.items||[]).map(Item.fromJSON), o.collapsed, o.id);
+  }
+}
+
+/** Une checklist de voyage : un nom, une icône, des sections ordonnées. */
+class Checklist{
+  constructor(name, emoji, sections, id){
+    this.id       = id || Utils.uid();
+    this.name     = name;
+    this.emoji    = emoji || "🧳";
+    this.sections = sections || [];
+  }
+  get total(){ return this.sections.reduce((n,s) => n + s.total, 0); }
+  get done(){ return this.sections.reduce((n,s) => n + s.done, 0); }
+  get percent(){ return this.total ? Math.round(this.done / this.total * 100) : 0; }
+
+  addSection(name){
+    const s = new Section(name, [], false);
+    this.sections.push(s);
+    return s;
+  }
+  removeSection(id){
+    const i = this.sections.findIndex(s => s.id === id);
+    if(i >= 0) return this.sections.splice(i,1)[0];
+    return null;
+  }
+  findSection(id){ return this.sections.find(s => s.id === id) || null; }
+  indexOfSection(id){ return this.sections.findIndex(s => s.id === id); }
+
+  /** Retrouve un objet et sa section d'appartenance. */
+  locate(itemId){
+    for(const s of this.sections){
+      const it = s.findItem(itemId);
+      if(it) return { section:s, item:it };
+    }
+    return null;
+  }
+  /** Coche ou décoche tous les objets. */
+  setAll(state){
+    this.sections.forEach(s => s.items.forEach(i => { i.checked = state; }));
+  }
+
+  toJSON(){
+    return {
+      id:this.id, name:this.name, emoji:this.emoji,
+      sections:this.sections.map(s => s.toJSON())
+    };
+  }
+  static fromJSON(o){
+    return new Checklist(o.name, o.emoji, (o.sections||[]).map(Section.fromJSON), o.id);
+  }
+}
+
+/** Préférences utilisateur. */
+class Settings{
+  constructor(o){
+    o = o || {};
+    this.theme         = o.theme         || "dark";  // "dark" | "light"
+    this.compact       = o.compact       === true;
+    this.checkSize     = o.checkSize     || "m";     // "s" | "m" | "l"
+    this.textSize      = o.textSize      || "m";
+    this.confirmDelete = o.confirmDelete !== false;
+    this.confirmReset  = o.confirmReset  !== false;
+    this.openLast      = o.openLast      !== false;
+    this.lastListId    = o.lastListId    || null;
+  }
+  toJSON(){
+    return {
+      theme:this.theme, compact:this.compact,
+      checkSize:this.checkSize, textSize:this.textSize,
+      confirmDelete:this.confirmDelete, confirmReset:this.confirmReset,
+      openLast:this.openLast, lastListId:this.lastListId
+    };
+  }
+}
+
+/* =========================================================================
+   CONTENUS D'ORIGINE  (créés au premier lancement)
+   ========================================================================= */
+class Seed{
+  /** Checklist Ski, contenu exact demandé. */
+  static ski(){
+    const data = [
+      ["👕 Vêtements", [
+        "3 ensembles sous-vêtements (t-shirt, caleçon, chaussettes)",
+        "1 pyjama",
+        "pantalon + caleçon + chaussette + t-shirt + t-shirt manches longues + pull",
+        "pantalon de rechange",
+        "3 t-shirts manches longues"
+      ]],
+      ["🎿 Tenue de ski", [
+        "veste de ski","pantalon de ski","damart gris","damart blanc",
+        "4 paires de chaussettes de ski","bonnet","tour de cou","gants","masque"
+      ]],
+      ["👟 Chaussures", ["chaussures de randonnée","chaussons"]],
+      ["🚗 Voiture", ["accroche téléphone","chargeur allume-cigare"]],
+      ["🧴 Toilette", [
+        "gel douche + shampoing","brosse à dents","dentifrice","déodorant",
+        "rasoir","crème solaire","stick lèvres"
+      ]],
+      ["💻 Electronique", [
+        "PC portable","chargeur PC","tablette","chargeur tablette",
+        "téléphone","chargeur téléphone","multiprise","batterie externe"
+      ]],
+      ["⛷️ Pistes", ["sac à dos","gourde","snacks"]]
+    ];
+    return new Checklist("Ski","🎿", data.map(([n,items]) =>
+      new Section(n, items.map(t => new Item(t, null, false)), false)
+    ));
+  }
+
+  /** Trame de départ pour les autres voyages — à ajuster librement. */
+  static basic(name, emoji, blocks){
+    return new Checklist(name, emoji, blocks.map(([n,items]) =>
+      new Section(n, items.map(t => new Item(t, null, false)), false)
+    ));
+  }
+
+  static all(){
+    return [
+      Seed.ski(),
+      Seed.basic("Mer","🏖️",[
+        ["👕 Vêtements",[
+          "2 maillots de bain","t-shirts","short","robe / chemise légère",
+          "chapeau à bord large","pull ou sweat pour le soir","coupe-vent léger",
+          "sous-vêtements","chaussettes","pyjama","tenue pour sortir le soir"
+        ]],
+        ["👟 Chaussures",["tongs","chaussures d'eau","baskets"]],
+        ["🏖️ Plage",[
+          "serviette de plage","paréo","lunettes de soleil","sac de plage",
+          "natte ou drap de sol","parasol","masque et tuba","pochette étanche téléphone",
+          "sac pour le linge mouillé","glacière souple","gourde isotherme",
+          "talc (retire le sable)","raquettes / ballon","livre ou liseuse"
+        ]],
+        ["🧴 Toilette",[
+          "crème solaire","après-soleil","stick lèvres indice","shampoing + démêlant",
+          "gel douche","brosse à dents","dentifrice","déodorant","rasoir",
+          "brosse à cheveux","anti-moustiques","lingettes"
+        ]],
+        ["💊 Pharmacie",[
+          "trousse de secours","pansements","désinfectant","paracétamol",
+          "anti-diarrhéique","aloe vera ou Biafine","gel apaisant méduses",
+          "pince à épiler","traitements personnels + ordonnance","anti-nausée bateau"
+        ]],
+        ["💻 Electronique",[
+          "téléphone","chargeur téléphone","batterie externe","écouteurs",
+          "chargeur secteur multi-ports","adaptateur de prise","enceinte","appareil photo étanche"
+        ]],
+        ["📄 Documents",[
+          "carte d'identité","passeport","carte vitale","carte européenne d'assurance maladie",
+          "permis de conduire","carte grise","attestation d'assurance","carte bancaire",
+          "espèces","réservation","billets"
+        ]],
+        ["🧺 Divers",["sac à linge sale","lessive de voyage","fil à linge + pinces","cadenas","sacs poubelle"]]
+      ]),
+      Seed.basic("City Trip","🏙️",[
+        ["👕 Vêtements",["tenues de jour","tenue de soirée","pull","veste","chaussures de marche"]],
+        ["🧴 Toilette",["trousse de toilette","brosse à dents","dentifrice","déodorant"]],
+        ["💻 Electronique",["téléphone","chargeur téléphone","batterie externe","écouteurs"]],
+        ["📄 Documents",["carte d'identité","billets de train","réservation hôtel","carte bancaire"]]
+      ]),
+      Seed.basic("Camping","🏕️",[
+        ["⛺ Bivouac",["tente","sac de couchage","matelas","lampe frontale","piles"]],
+        ["🍳 Cuisine",["réchaud","cartouche de gaz","popote","couverts","briquet","sacs poubelle"]],
+        ["👕 Vêtements",["tenues de rechange","veste imperméable","chaussures de randonnée","chaussettes"]],
+        ["🧴 Toilette",["serviette microfibre","savon","brosse à dents","papier toilette"]],
+        ["🩹 Sécurité",["trousse de secours","couteau","anti-moustiques"]]
+      ]),
+      Seed.basic("Road Trip","🚐",[
+        ["🚗 Voiture",["permis de conduire","carte grise","attestation d'assurance","gilet","triangle"]],
+        ["🔌 À bord",["accroche téléphone","chargeur allume-cigare","multiprise","glacière"]],
+        ["👕 Vêtements",["tenues de rechange","pull","veste"]],
+        ["🧴 Toilette",["trousse de toilette","serviette","mouchoirs"]],
+        ["🥤 Provisions",["bouteilles d'eau","snacks","café"]]
+      ]),
+      Seed.basic("Avion","✈️",[
+        ["📄 Documents",["passeport","carte d'identité","carte d'embarquement","assurance voyage"]],
+        ["🎒 Bagage cabine",["téléphone","chargeur téléphone","batterie externe","écouteurs","liquides < 100 ml"]],
+        ["👕 Vêtements",["tenues","pull pour l'avion","chaussures confortables"]],
+        ["🧴 Toilette",["brosse à dents","dentifrice","déodorant","médicaments"]],
+        ["💊 Divers",["masque de sommeil","bouchons d'oreilles","livre"]]
+      ])
+    ];
+  }
+}
+
+/* =========================================================================
+   STOCKAGE  (localStorage, écriture automatique et différée)
+   ========================================================================= */
+class Store{
+  constructor(key){
+    this.key       = key;
+    this.checklists= [];
+    this.settings  = new Settings();
+    // L'écriture est groupée pour rester fluide même avec plusieurs centaines d'objets.
+    this._flush    = Utils.debounce(() => this._write(), 180);
+  }
+
+  /** Charge les données, ou installe le contenu d'origine au premier lancement. */
+  load(){
+    let raw = null;
+    try{ raw = localStorage.getItem(this.key); }
+    catch(e){ raw = null; }
+
+    // Preuve de persistance : des données d'une session précédente ont été relues.
+    this.hadData = !!raw;
+
+    if(!raw){
+      this.checklists = Seed.all();
+      this.settings   = new Settings();
+      this._write();
+      return;
+    }
+    try{
+      const data = JSON.parse(raw);
+      this.checklists = (data.checklists || []).map(Checklist.fromJSON);
+      this.settings   = new Settings(data.settings);
+      if(!this.checklists.length) this.checklists = Seed.all();
+    }catch(e){
+      // Données illisibles : on repart proprement plutôt que de bloquer l'application.
+      this.checklists = Seed.all();
+      this.settings   = new Settings();
+      this._write();
+    }
+  }
+
+  /** Marque les données comme modifiées : sauvegarde immédiate et automatique. */
+  save(){ this._flush(); }
+
+  _write(){
+    const payload = {
+      version:1,
+      settings:this.settings.toJSON(),
+      checklists:this.checklists.map(c => c.toJSON())
+    };
+    try{
+      localStorage.setItem(this.key, JSON.stringify(payload));
+    }catch(e){
+      // Quota dépassé ou stockage refusé : on prévient sans perdre la session en cours.
+      App.instance && App.instance.snack("Sauvegarde impossible : stockage plein ou bloqué");
+    }
+  }
+
+  /** Efface tout et réinstalle le contenu d'origine. */
+  wipe(){
+    try{ localStorage.removeItem(this.key); }catch(e){}
+    this.checklists = Seed.all();
+    this.settings   = new Settings();
+    this._write();
+  }
+
+  find(id){ return this.checklists.find(c => c.id === id) || null; }
+  add(checklist){ this.checklists.push(checklist); this.save(); return checklist; }
+  remove(id){
+    const i = this.checklists.findIndex(c => c.id === id);
+    if(i >= 0){ this.checklists.splice(i,1); this.save(); return true; }
+    return false;
+  }
+  /** Remplace l'intégralité des données (import de sauvegarde). */
+  replaceAll(checklists){
+    this.checklists = checklists;
+    this.save();
+  }
+}
+
+/* =========================================================================
+   DIAGNOSTIC DU STOCKAGE
+   Certaines façons d'ouvrir le fichier (flux content:// d'un gestionnaire de
+   fichiers, navigation privée) donnent un localStorage jetable : tout marche
+   pendant la session puis disparaît. On le détecte au lieu de le subir.
+   ========================================================================= */
+class StorageProbe{
+  /**
+   * @param {boolean} hadData  vrai si des données d'une session précédente ont été relues
+   * @returns {{level:"ok"|"warn"|"fail", title:string, text:string}}
+   */
+  static check(hadData){
+    // 1. Le stockage répond-il seulement ?
+    try{
+      const k = "__valise_probe__";
+      localStorage.setItem(k, "1");
+      const ok = localStorage.getItem(k) === "1";
+      localStorage.removeItem(k);
+      if(!ok) throw new Error("relecture");
+    }catch(e){
+      return {
+        level:"fail",
+        title:"Les modifications ne seront pas conservées",
+        text:"Ce navigateur refuse le stockage local ici. Ouvrez l'application depuis son adresse https, ou copiez vos données avant de fermer."
+      };
+    }
+
+    // 2. Flux d'un gestionnaire de fichiers : l'adresse change à chaque ouverture,
+    //    donc les données écrites ne seront jamais retrouvées.
+    if(location.protocol === "content:"){
+      return {
+        level:"fail",
+        title:"Les modifications ne seront pas conservées",
+        text:"Le fichier est ouvert via le gestionnaire de fichiers. Ouvrez plutôt l'application depuis son adresse https."
+      };
+    }
+
+    // 3. Des données ont survécu à une session précédente : persistance prouvée.
+    if(hadData) return { level:"ok" };
+
+    // 4. Premier lancement sur origine opaque (file://) : issue inconnue.
+    if(window.origin === "null" || location.protocol === "file:"){
+      return {
+        level:"warn",
+        title:"Persistance non vérifiée",
+        text:"Premier lancement depuis un fichier local. Cochez un objet, fermez complètement le navigateur, rouvrez : si la coche a disparu, vos données ne sont pas conservées."
+      };
+    }
+    return { level:"ok" };
+  }
+
+  /** Demande au navigateur de ne pas évincer les données en cas de manque de place. */
+  static requestPersistence(){
+    try{
+      if(navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    }catch(e){ /* sans conséquence */ }
+  }
+}
+
+/* =========================================================================
+   COUCHE MODALE  (snackbar, dialogues, feuilles d'actions)
+   ========================================================================= */
+class UI{
+  constructor(){
+    this.scrim   = document.getElementById("scrim");
+    this.sheet   = document.getElementById("sheet");
+    this.sTitle  = document.getElementById("sheet-title");
+    this.sBody   = document.getElementById("sheet-body");
+    this.dialog  = document.getElementById("dialog");
+    this.dTitle  = document.getElementById("dialog-title");
+    this.dBody   = document.getElementById("dialog-body");
+    this.dActions= document.getElementById("dialog-actions");
+    this.snackEl = document.getElementById("snackbar");
+    this._snackT = null;
+    this._onClose= null;
+
+    this.scrim.addEventListener("click", () => this.close());
+    // La touche Retour physique / Échap ferme la couche modale ouverte.
+    document.addEventListener("keydown", e => {
+      if(e.key === "Escape") this.close();
+    });
+  }
+
+  /** Message temporaire en bas d'écran. */
+  snack(msg){
+    this.snackEl.textContent = msg;
+    this.snackEl.classList.add("open");
+    clearTimeout(this._snackT);
+    this._snackT = setTimeout(() => this.snackEl.classList.remove("open"), 2800);
+  }
+
+  isOpen(){
+    return this.sheet.classList.contains("open") || this.dialog.classList.contains("open");
+  }
+
+  close(){
+    this.sheet.classList.remove("open");
+    this.dialog.classList.remove("open");
+    this.scrim.classList.remove("open");
+    const cb = this._onClose; this._onClose = null;
+    if(cb) cb();
+  }
+
+  /**
+   * Ouvre une feuille d'actions.
+   * @param {string} title
+   * @param {Array} actions  { label, sub, icon(svg path), danger, run() }
+   */
+  openSheet(title, actions){
+    this.sTitle.textContent = title;
+    this.sBody.innerHTML = "";
+    actions.forEach(a => {
+      if(a.divider){
+        const d = document.createElement("div");
+        d.className = "divider";
+        this.sBody.appendChild(d);
+        return;
+      }
+      const b = document.createElement("button");
+      b.className = "action" + (a.danger ? " danger" : "");
+      b.innerHTML =
+        '<svg viewBox="0 0 24 24"><path d="' + a.icon + '"/></svg>' +
+        '<span>' + Utils.esc(a.label) +
+        (a.sub ? '<span class="sub">' + Utils.esc(a.sub) + '</span>' : '') +
+        '</span>';
+      b.addEventListener("click", () => { this.close(); setTimeout(a.run, 210); });
+      this.sBody.appendChild(b);
+    });
+    this.scrim.classList.add("open");
+    this.sheet.classList.add("open");
+  }
+
+  /** Ouvre une feuille au contenu HTML libre (réorganisation par exemple). */
+  openSheetHTML(title, html, wire){
+    this.sTitle.textContent = title;
+    this.sBody.innerHTML = html;
+    if(wire) wire(this.sBody);
+    this.scrim.classList.add("open");
+    this.sheet.classList.add("open");
+  }
+
+  /** Boîte de confirmation. `onYes` n'est appelé qu'après validation. */
+  confirm(title, message, yesLabel, onYes, danger){
+    this.dTitle.textContent = title;
+    this.dBody.innerHTML = '<p>' + Utils.esc(message) + '</p>';
+    this.dActions.innerHTML = "";
+
+    const no = document.createElement("button");
+    no.className = "btn-text";
+    no.textContent = "Annuler";
+    no.addEventListener("click", () => this.close());
+
+    const yes = document.createElement("button");
+    yes.className = "btn-text" + (danger ? " danger" : "");
+    yes.textContent = yesLabel;
+    yes.addEventListener("click", () => { this.close(); setTimeout(onYes, 180); });
+
+    this.dActions.appendChild(no);
+    this.dActions.appendChild(yes);
+    this.scrim.classList.add("open");
+    this.dialog.classList.add("open");
+  }
+
+  /**
+   * Formulaire générique.
+   * @param {string} title
+   * @param {Array} fields  { key, label, type, value, placeholder, options }
+   * @param {string} okLabel
+   * @param {Function} onOk  reçoit un objet { key: valeur }
+   */
+  form(title, fields, okLabel, onOk){
+    this.dTitle.textContent = title;
+    this.dBody.innerHTML = fields.map(f => {
+      const id = "f_" + f.key;
+      if(f.type === "select"){
+        return '<div class="field"><label for="'+id+'">'+Utils.esc(f.label)+'</label>' +
+               '<select id="'+id+'">' +
+               f.options.map(o => '<option value="'+Utils.esc(o.value)+'"' +
+                 (o.value === f.value ? ' selected' : '') + '>'+Utils.esc(o.label)+'</option>').join("") +
+               '</select></div>';
+      }
+      return '<div class="field"><label for="'+id+'">'+Utils.esc(f.label)+'</label>' +
+             '<input id="'+id+'" type="'+(f.type||"text")+'" ' +
+             (f.type === "number" ? 'inputmode="numeric" min="1" ' : '') +
+             'value="'+Utils.esc(f.value == null ? "" : f.value)+'" ' +
+             'placeholder="'+Utils.esc(f.placeholder||"")+'" autocomplete="off"></div>';
+    }).join("");
+
+    this.dActions.innerHTML = "";
+    const cancel = document.createElement("button");
+    cancel.className = "btn-text";
+    cancel.textContent = "Annuler";
+    cancel.addEventListener("click", () => this.close());
+
+    const ok = document.createElement("button");
+    ok.className = "btn-text";
+    ok.textContent = okLabel;
+
+    const submit = () => {
+      const out = {};
+      fields.forEach(f => { out[f.key] = document.getElementById("f_" + f.key).value.trim(); });
+      this.close();
+      setTimeout(() => onOk(out), 180);
+    };
+    ok.addEventListener("click", submit);
+
+    this.dActions.appendChild(cancel);
+    this.dActions.appendChild(ok);
+    this.scrim.classList.add("open");
+    this.dialog.classList.add("open");
+
+    // Focus sur le premier champ + validation à la touche Entrée.
+    setTimeout(() => {
+      const first = this.dBody.querySelector("input,select");
+      if(first){
+        first.focus();
+        if(first.select) first.select();
+      }
+      this.dBody.querySelectorAll("input").forEach(inp => {
+        inp.addEventListener("keydown", e => { if(e.key === "Enter") submit(); });
+      });
+    }, 90);
+  }
+}
+
+/* =========================================================================
+   EXPORT / IMPORT
+   ========================================================================= */
+class Exporter{
+  /** JSON léger : nom, date, uniquement les objets cochés. */
+  static checkedJSON(list){
+    const items = [];
+    list.sections.forEach(s => s.items.forEach(i => { if(i.checked) items.push(i.name); }));
+    return { trip:list.name, date:Utils.today(), items:items };
+  }
+
+  /** JSON complet : sections, ordre, éléments, cases cochées. */
+  static fullJSON(list){
+    return {
+      format:"valise.checklist",
+      version:1,
+      exported:Utils.today(),
+      checklist:list.toJSON()
+    };
+  }
+
+  /** Sauvegarde intégrale : toutes les checklists + préférences. */
+  static backupJSON(store){
+    return {
+      format:"valise.backup",
+      version:1,
+      exported:Utils.today(),
+      settings:store.settings.toJSON(),
+      checklists:store.checklists.map(c => c.toJSON())
+    };
+  }
+
+  /**
+   * Prépare la vue d'impression (objets cochés uniquement) puis ouvre
+   * la boîte d'impression du système, qui propose « Enregistrer au format PDF ».
+   */
+  static printChecked(list){
+    const area = document.getElementById("printArea");
+    let html = '<h1>' + Utils.esc(list.name) + '</h1>' +
+               '<div class="meta">' + Utils.esc(Utils.today()) +
+               ' — ' + list.done + ' objets préparés sur ' + list.total + '</div>';
+    let any = false;
+
+    list.sections.forEach(s => {
+      const done = s.items.filter(i => i.checked);
+      if(!done.length) return;
+      any = true;
+      html += '<h2>' + Utils.esc(s.name) + '</h2><ul>';
+      done.forEach(i => {
+        html += '<li><span class="box">☑</span> ' + Utils.esc(i.name) +
+                (i.qty ? ' (×' + i.qty + ')' : '') + '</li>';
+      });
+      html += '</ul>';
+    });
+
+    if(!any) html += '<p>Aucun objet coché.</p>';
+    area.innerHTML = html;
+    setTimeout(() => window.print(), 60);
+  }
+}
+
+class Importer{
+  /**
+   * Analyse un JSON importé et renvoie sa nature.
+   * Retourne { kind:"checked"|"checklist"|"backup", data } ou null.
+   */
+  static parse(text){
+    let o;
+    try{ o = JSON.parse(text); }catch(e){ return null; }
+    if(!o || typeof o !== "object") return null;
+
+    if(Array.isArray(o.checklists))                 return { kind:"backup",    data:o };
+    if(o.checklist && o.checklist.sections)         return { kind:"checklist", data:o.checklist };
+    if(Array.isArray(o.sections))                   return { kind:"checklist", data:o };
+    if(Array.isArray(o.items))                      return { kind:"checked",   data:o };
+    return null;
+  }
+
+  /**
+   * Applique une liste d'objets cochés à une checklist existante :
+   * les noms correspondants sont cochés, le reste est décoché.
+   * Renvoie le nombre de correspondances trouvées.
+   */
+  static applyChecked(list, names){
+    const wanted = new Set(names.map(n => Utils.norm(n)));
+    let hits = 0;
+    list.sections.forEach(s => s.items.forEach(i => {
+      const on = wanted.has(Utils.norm(i.name));
+      i.checked = on;
+      if(on) hits++;
+    }));
+    return hits;
+  }
+}
+
+/* =========================================================================
+   ÉCRAN D'ACCUEIL
+   ========================================================================= */
+class HomeView{
+  constructor(app){
+    this.app  = app;
+    this.host = document.getElementById("home-list");
+
+    document.getElementById("btn-new-trip")
+      .addEventListener("click", () => this.createChecklist());
+    document.getElementById("btn-open-settings")
+      .addEventListener("click", () => this.app.showSettings());
+
+    // Délégation : un seul écouteur pour toutes les cartes.
+    this.host.addEventListener("click", e => {
+      const card = e.target.closest(".trip-card");
+      if(!card) return;
+      const id = card.dataset.id;
+      if(e.target.closest("[data-menu]")) this.openMenu(id);
+      else this.app.openChecklist(id);
+    });
+  }
+
+  render(){
+    const lists = this.app.store.checklists;
+    if(!lists.length){
+      this.host.innerHTML =
+        '<div class="empty"><div class="big">🧳</div>' +
+        '<p>Aucune checklist. Touchez « Checklist » pour en créer une.</p></div>';
+      return;
+    }
+    this.host.innerHTML = lists.map((c,idx) => {
+      const pct = c.percent;
+      return '' +
+      '<div class="trip-card" data-id="'+c.id+'" style="animation-delay:'+Math.min(idx*35,280)+'ms">' +
+        '<div class="trip-emoji">'+Utils.esc(c.emoji)+'</div>' +
+        '<div class="trip-main">' +
+          '<div class="trip-name">'+Utils.esc(c.name)+'</div>' +
+          '<div class="trip-sub">'+c.done+' / '+c.total+' objets préparés</div>' +
+          '<div class="trip-bar"><i style="width:'+pct+'%"></i></div>' +
+        '</div>' +
+        '<button class="icon-btn" data-menu aria-label="Actions sur '+Utils.esc(c.name)+'">' +
+          '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2m0 2a2 2 0 1 0 2 2 2 2 0 0 0-2-2m0 6a2 2 0 1 0 2 2 2 2 0 0 0-2-2"/></svg>' +
+        '</button>' +
+      '</div>';
+    }).join("");
+  }
+
+  /** Création d'une checklist : nom + icône. */
+  createChecklist(){
+    this.app.ui.form("Nouvelle checklist", [
+      { key:"name",  label:"Nom",   value:"", placeholder:"Week-end à la montagne" },
+      { key:"emoji", label:"Icône", value:"🧳", placeholder:"🧳" }
+    ], "Créer", v => {
+      if(!v.name){ this.app.snack("Il faut un nom"); return; }
+      const list = new Checklist(v.name, v.emoji || "🧳", []);
+      list.addSection("👕 Vêtements");
+      list.addSection("🧴 Toilette");
+      list.addSection("💻 Electronique");
+      list.addSection("📄 Documents");
+      this.app.store.add(list);
+      this.render();
+      this.app.openChecklist(list.id);
+      this.app.snack("Checklist créée");
+    });
+  }
+
+  openMenu(id){
+    const list = this.app.store.find(id);
+    if(!list) return;
+
+    this.app.ui.openSheet(list.name, [
+      { label:"Renommer", icon:"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z",
+        run:() => this.rename(list) },
+      { label:"Dupliquer", sub:"Copie complète, cases décochées",
+        icon:"M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m0 16H8V7h11z",
+        run:() => this.duplicate(list) },
+      { divider:true },
+      { label:"Supprimer la checklist", danger:true,
+        icon:"M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z",
+        run:() => this.remove(list) }
+    ]);
+  }
+
+  rename(list){
+    this.app.ui.form("Renommer", [
+      { key:"name",  label:"Nom",   value:list.name },
+      { key:"emoji", label:"Icône", value:list.emoji }
+    ], "Enregistrer", v => {
+      if(!v.name) return;
+      list.name  = v.name;
+      list.emoji = v.emoji || "🧳";
+      this.app.store.save();
+      this.render();
+    });
+  }
+
+  duplicate(list){
+    const copy = Checklist.fromJSON(JSON.parse(JSON.stringify(list.toJSON())));
+    copy.id = Utils.uid();
+    copy.name = list.name + " (copie)";
+    copy.sections.forEach(s => {
+      s.id = Utils.uid();
+      s.items.forEach(i => { i.id = Utils.uid(); i.checked = false; });
+    });
+    this.app.store.add(copy);
+    this.render();
+    this.app.snack("Checklist dupliquée");
+  }
+
+  remove(list){
+    const go = () => {
+      this.app.store.remove(list.id);
+      this.render();
+      this.app.snack("Checklist supprimée");
+    };
+    if(this.app.store.settings.confirmDelete){
+      this.app.ui.confirm("Supprimer « " + list.name + " » ?",
+        "Les " + list.total + " objets de cette checklist seront perdus.",
+        "Supprimer", go, true);
+    } else go();
+  }
+}
+
+/* =========================================================================
+   ÉCRAN CHECKLIST
+   ========================================================================= */
+class ChecklistView{
+  constructor(app){
+    this.app     = app;
+    this.list    = null;
+    this.filter  = "all";      // "all" | "checked" | "unchecked"
+    this.query   = "";
+
+    this.host       = document.getElementById("sections-host");
+    this.titleEl    = document.getElementById("list-title");
+    this.progText   = document.getElementById("progress-text");
+    this.progPct    = document.getElementById("progress-pct");
+    this.progFill   = document.getElementById("progress-fill");
+    this.searchWrap = document.getElementById("search-wrap");
+    this.searchInput= document.getElementById("search-input");
+
+    this._bind();
+  }
+
+  _bind(){
+    document.getElementById("btn-back")
+      .addEventListener("click", () => this.app.showHome());
+    document.getElementById("btn-list-menu")
+      .addEventListener("click", () => this.openMenu());
+    document.getElementById("btn-add-item")
+      .addEventListener("click", () => this.addItemFlow());
+
+    // Recherche instantanée (légèrement différée pour rester fluide).
+    const onSearch = Utils.debounce(() => {
+      this.query = this.searchInput.value.trim();
+      this.searchWrap.classList.toggle("filled", this.query.length > 0);
+      this.renderSections();
+    }, 110);
+    this.searchInput.addEventListener("input", onSearch);
+
+    document.getElementById("btn-clear-search").addEventListener("click", () => {
+      this.searchInput.value = "";
+      this.query = "";
+      this.searchWrap.classList.remove("filled");
+      this.renderSections();
+      this.searchInput.blur();
+    });
+
+    // Filtres
+    document.querySelectorAll(".chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        this.filter = chip.dataset.filter;
+        document.querySelectorAll(".chip").forEach(c =>
+          c.setAttribute("aria-pressed", String(c === chip)));
+        this.renderSections();
+      });
+    });
+
+    // Un seul écouteur pour toute la liste : indispensable avec des centaines d'objets.
+    this.host.addEventListener("click", e => this._onHostClick(e));
+  }
+
+  /** Aiguillage des clics dans la liste (délégation d'événements). */
+  _onHostClick(e){
+    const secEl = e.target.closest(".section");
+    if(!secEl) return;
+    const sectionId = secEl.dataset.id;
+
+    // Menu de section
+    if(e.target.closest("[data-sec-menu]")){ this.openSectionMenu(sectionId); return; }
+    // Pli / dépli
+    if(e.target.closest(".section-title")){ this.toggleSection(sectionId); return; }
+
+    const itemEl = e.target.closest(".item");
+    if(!itemEl) return;
+    const itemId = itemEl.dataset.id;
+
+    // Menu d'objet
+    if(e.target.closest("[data-item-menu]")){ this.openItemMenu(sectionId, itemId); return; }
+    // Cocher / décocher : toute la ligne est cliquable
+    this.toggleItem(sectionId, itemId, itemEl);
+  }
+
+  /* ---------- Ouverture ---------- */
+  open(list){
+    this.list   = list;
+    this.filter = "all";
+    this.query  = "";
+    this.searchInput.value = "";
+    this.searchWrap.classList.remove("filled");
+    document.querySelectorAll(".chip").forEach(c =>
+      c.setAttribute("aria-pressed", String(c.dataset.filter === "all")));
+    this.titleEl.textContent = list.emoji + "  " + list.name;
+    this.renderAll();
+  }
+
+  renderAll(){
+    this.renderProgress();
+    this.renderSections();
+  }
+
+  /* ---------- Progression ---------- */
+  renderProgress(){
+    const done = this.list.done, total = this.list.total;
+    const pct  = total ? Math.round(done/total*100) : 0;
+    this.progText.textContent = done + " / " + total + " objets préparés";
+    this.progPct.textContent  = pct + " %";
+    this.progFill.style.width = pct + "%";
+    this.progFill.classList.toggle("full", total > 0 && done === total);
+  }
+
+  /* ---------- Rendu des sections ---------- */
+
+  /** Objets d'une section visibles compte tenu du filtre et de la recherche. */
+  visibleItems(section){
+    const q = Utils.norm(this.query);
+    return section.items.filter(it => {
+      if(this.filter === "checked"   && !it.checked) return false;
+      if(this.filter === "unchecked" &&  it.checked) return false;
+      if(q && Utils.norm(it.name).indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+
+  renderSections(){
+    const searching = this.query.length > 0 || this.filter !== "all";
+
+    if(!this.list.sections.length){
+      this.host.innerHTML =
+        '<div class="empty"><div class="big">📂</div>' +
+        '<p>Aucune section. Utilisez le menu en haut à droite pour en ajouter une.</p></div>';
+      return;
+    }
+
+    let html = "";
+    let shown = 0;
+
+    this.list.sections.forEach(sec => {
+      const items = this.visibleItems(sec);
+      // Pendant une recherche ou un filtrage, les sections vides sont masquées.
+      if(searching && !items.length) return;
+      shown += items.length;
+
+      // En recherche, les sections sont dépliées d'office pour montrer les résultats.
+      const collapsed = searching ? false : sec.collapsed;
+
+      html += '<div class="section' + (collapsed ? " collapsed" : "") + '" data-id="'+sec.id+'">' +
+        '<div class="section-head">' +
+          '<button class="section-title" aria-expanded="'+(!collapsed)+'">' +
+            '<svg class="caret" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>' +
+            '<span class="section-name">'+Utils.esc(sec.name)+'</span>' +
+          '</button>' +
+          '<span class="section-count'+(sec.total && sec.done === sec.total ? " done" : "")+'">' +
+            sec.done + '/' + sec.total +
+          '</span>' +
+          '<button class="icon-btn" data-sec-menu aria-label="Actions sur la section">' +
+            '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2m0 2a2 2 0 1 0 2 2 2 2 0 0 0-2-2m0 6a2 2 0 1 0 2 2 2 2 0 0 0-2-2"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="section-body">' + items.map(it => this.itemHTML(it)).join("") + '</div>' +
+      '</div>';
+    });
+
+    if(searching && !shown){
+      html = '<div class="empty"><div class="big">🔍</div><p>Aucun objet ne correspond.</p></div>';
+    }
+    this.host.innerHTML = html;
+  }
+
+  itemHTML(it){
+    return '<div class="item'+(it.checked ? " checked" : "")+'" data-id="'+it.id+'">' +
+      '<span class="check" role="checkbox" aria-checked="'+it.checked+'">' +
+        '<svg viewBox="0 0 24 24"><polyline points="4,12.5 9.5,18 20,6.5"/></svg>' +
+      '</span>' +
+      '<span class="item-label">' +
+        '<span class="item-name">'+Utils.esc(it.name)+'</span>' +
+        (it.qty ? '<span class="qty">×'+it.qty+'</span>' : '') +
+      '</span>' +
+      '<button class="icon-btn" data-item-menu aria-label="Actions sur l\'objet">' +
+        '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2m0 2a2 2 0 1 0 2 2 2 2 0 0 0-2-2m0 6a2 2 0 1 0 2 2 2 2 0 0 0-2-2"/></svg>' +
+      '</button>' +
+    '</div>';
+  }
+
+  /** Met à jour uniquement le compteur d'une section (évite un rendu complet). */
+  refreshSectionCount(sectionId){
+    const sec = this.list.findSection(sectionId);
+    const el  = this.host.querySelector('.section[data-id="'+sectionId+'"] .section-count');
+    if(!sec || !el) return;
+    el.textContent = sec.done + "/" + sec.total;
+    el.classList.toggle("done", sec.total > 0 && sec.done === sec.total);
+  }
+
+  /* ---------- Actions sur les objets ---------- */
+
+  toggleItem(sectionId, itemId, el){
+    const sec = this.list.findSection(sectionId);
+    if(!sec) return;
+    const it = sec.findItem(itemId);
+    if(!it) return;
+
+    it.checked = !it.checked;
+    this.app.store.save();
+
+    // Mise à jour ciblée du DOM : aucune reconstruction de la liste.
+    el.classList.toggle("checked", it.checked);
+    const box = el.querySelector(".check");
+    if(box) box.setAttribute("aria-checked", String(it.checked));
+    this.refreshSectionCount(sectionId);
+    this.renderProgress();
+
+    // Sous filtre « Cochés » / « Non cochés », la ligne quitte la vue.
+    if(this.filter !== "all"){
+      setTimeout(() => this.renderSections(), 260);
+    }
+  }
+
+  /** Ajout depuis le bouton flottant : choix de la section puis saisie. */
+  addItemFlow(){
+    if(!this.list.sections.length){
+      this.addSection();
+      return;
+    }
+    if(this.list.sections.length === 1){
+      this.addItemTo(this.list.sections[0].id);
+      return;
+    }
+    this.app.ui.openSheet("Ajouter dans…", this.list.sections.map(s => ({
+      label:s.name,
+      icon:"M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2",
+      run:() => this.addItemTo(s.id)
+    })));
+  }
+
+  addItemTo(sectionId){
+    const sec = this.list.findSection(sectionId);
+    if(!sec) return;
+    this.app.ui.form("Nouvel objet dans « " + sec.name + " »", [
+      { key:"name", label:"Nom",                 value:"", placeholder:"chargeur téléphone" },
+      { key:"qty",  label:"Quantité (optionnel)", value:"", placeholder:"", type:"number" }
+    ], "Ajouter", v => {
+      if(!v.name){ this.app.snack("Il faut un nom"); return; }
+      sec.collapsed = false;
+      sec.addItem(v.name, v.qty ? Number(v.qty) : null);
+      this.app.store.save();
+      this.renderAll();
+      this.app.snack("Objet ajouté");
+    });
+  }
+
+  openItemMenu(sectionId, itemId){
+    const sec = this.list.findSection(sectionId);
+    if(!sec) return;
+    const it = sec.findItem(itemId);
+    if(!it) return;
+    const idx = sec.indexOfItem(itemId);
+
+    const actions = [
+      { label:"Modifier",
+        icon:"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z",
+        run:() => this.editItem(sec, it) }
+    ];
+    if(idx > 0) actions.push({
+      label:"Monter", icon:"M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z",
+      run:() => { Utils.move(sec.items, idx, idx-1); this.app.store.save(); this.renderSections(); }
+    });
+    if(idx < sec.items.length - 1) actions.push({
+      label:"Descendre", icon:"M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z",
+      run:() => { Utils.move(sec.items, idx, idx+1); this.app.store.save(); this.renderSections(); }
+    });
+    if(this.list.sections.length > 1) actions.push({
+      label:"Déplacer vers une autre section",
+      icon:"M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2",
+      run:() => this.moveItemToSection(sec, it)
+    });
+    actions.push({ divider:true });
+    actions.push({
+      label:"Supprimer", danger:true,
+      icon:"M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z",
+      run:() => this.deleteItem(sec, it)
+    });
+
+    this.app.ui.openSheet(it.name, actions);
+  }
+
+  editItem(sec, it){
+    this.app.ui.form("Modifier l'objet", [
+      { key:"name", label:"Nom",                  value:it.name },
+      { key:"qty",  label:"Quantité (optionnel)", value:(it.qty == null ? "" : it.qty), type:"number" }
+    ], "Enregistrer", v => {
+      if(!v.name){ this.app.snack("Il faut un nom"); return; }
+      it.name = v.name;
+      it.qty  = v.qty ? Number(v.qty) : null;
+      this.app.store.save();
+      this.renderSections();
+    });
+  }
+
+  moveItemToSection(fromSec, it){
+    const targets = this.list.sections.filter(s => s.id !== fromSec.id);
+    this.app.ui.openSheet("Déplacer vers…", targets.map(s => ({
+      label:s.name,
+      icon:"M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2",
+      run:() => {
+        fromSec.removeItem(it.id);
+        s.items.push(it);
+        s.collapsed = false;
+        this.app.store.save();
+        this.renderAll();
+        this.app.snack("Déplacé dans « " + s.name + " »");
+      }
+    })));
+  }
+
+  deleteItem(sec, it){
+    const go = () => {
+      sec.removeItem(it.id);
+      this.app.store.save();
+      this.renderAll();
+      this.app.snack("Objet supprimé");
+    };
+    if(this.app.store.settings.confirmDelete){
+      this.app.ui.confirm("Supprimer cet objet ?", it.name, "Supprimer", go, true);
+    } else go();
+  }
+
+  /* ---------- Actions sur les sections ---------- */
+
+  toggleSection(sectionId){
+    // Pendant une recherche, tout est déplié : le pli est neutralisé.
+    if(this.query || this.filter !== "all") return;
+    const sec = this.list.findSection(sectionId);
+    if(!sec) return;
+    sec.collapsed = !sec.collapsed;
+    this.app.store.save();
+    const el = this.host.querySelector('.section[data-id="'+sectionId+'"]');
+    if(el){
+      el.classList.toggle("collapsed", sec.collapsed);
+      const btn = el.querySelector(".section-title");
+      if(btn) btn.setAttribute("aria-expanded", String(!sec.collapsed));
+    }
+  }
+
+  openSectionMenu(sectionId){
+    const sec = this.list.findSection(sectionId);
+    if(!sec) return;
+    const idx = this.list.indexOfSection(sectionId);
+
+    const actions = [
+      { label:"Ajouter un objet", icon:"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z",
+        run:() => this.addItemTo(sec.id) },
+      { label:"Renommer la section",
+        icon:"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z",
+        run:() => this.renameSection(sec) },
+      { label:"Tout cocher dans la section", icon:"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+        run:() => { sec.items.forEach(i => i.checked = true);  this.app.store.save(); this.renderAll(); } },
+      { label:"Tout décocher dans la section", icon:"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+        run:() => { sec.items.forEach(i => i.checked = false); this.app.store.save(); this.renderAll(); } }
+    ];
+    if(idx > 0) actions.push({
+      label:"Monter la section", icon:"M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z",
+      run:() => { Utils.move(this.list.sections, idx, idx-1); this.app.store.save(); this.renderSections(); }
+    });
+    if(idx < this.list.sections.length - 1) actions.push({
+      label:"Descendre la section", icon:"M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z",
+      run:() => { Utils.move(this.list.sections, idx, idx+1); this.app.store.save(); this.renderSections(); }
+    });
+    actions.push({ divider:true });
+    actions.push({
+      label:"Supprimer la section", danger:true,
+      icon:"M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z",
+      run:() => this.deleteSection(sec)
+    });
+
+    this.app.ui.openSheet(sec.name, actions);
+  }
+
+  addSection(){
+    this.app.ui.form("Nouvelle section", [
+      { key:"name", label:"Nom", value:"", placeholder:"🧴 Toilette" }
+    ], "Ajouter", v => {
+      if(!v.name){ this.app.snack("Il faut un nom"); return; }
+      this.list.addSection(v.name);
+      this.app.store.save();
+      this.renderAll();
+      this.app.snack("Section ajoutée");
+    });
+  }
+
+  renameSection(sec){
+    this.app.ui.form("Renommer la section", [
+      { key:"name", label:"Nom", value:sec.name }
+    ], "Enregistrer", v => {
+      if(!v.name) return;
+      sec.name = v.name;
+      this.app.store.save();
+      this.renderSections();
+    });
+  }
+
+  deleteSection(sec){
+    const go = () => {
+      this.list.removeSection(sec.id);
+      this.app.store.save();
+      this.renderAll();
+      this.app.snack("Section supprimée");
+    };
+    if(this.app.store.settings.confirmDelete){
+      this.app.ui.confirm("Supprimer « " + sec.name + " » ?",
+        sec.total + " objet(s) seront supprimés avec la section.",
+        "Supprimer", go, true);
+    } else go();
+  }
+
+  /** Feuille dédiée à la réorganisation des sections. */
+  reorderSections(){
+    const build = () => this.list.sections.map((s,i) =>
+      '<div class="reorder-row" data-i="'+i+'">' +
+        '<span class="nm">'+Utils.esc(s.name)+'</span>' +
+        '<button class="icon-btn" data-up '+(i===0?"disabled":"")+' aria-label="Monter">' +
+          '<svg viewBox="0 0 24 24"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>' +
+        '<button class="icon-btn" data-down '+(i===this.list.sections.length-1?"disabled":"")+' aria-label="Descendre">' +
+          '<svg viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>' +
+      '</div>').join("");
+
+    this.app.ui.openSheetHTML("Réorganiser les sections", build(), body => {
+      body.addEventListener("click", e => {
+        const row = e.target.closest(".reorder-row");
+        if(!row) return;
+        const i = Number(row.dataset.i);
+        if(e.target.closest("[data-up]"))        Utils.move(this.list.sections, i, i-1);
+        else if(e.target.closest("[data-down]")) Utils.move(this.list.sections, i, i+1);
+        else return;
+        this.app.store.save();
+        body.innerHTML = build();
+        this.renderSections();
+      });
+    });
+  }
+
+  /* ---------- Menu principal de la checklist ---------- */
+  openMenu(){
+    const L = this.list;
+    this.app.ui.openSheet(L.name, [
+      { label:"Tout cocher", icon:"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+        run:() => { L.setAll(true); this.app.store.save(); this.renderAll(); this.app.snack("Tout est coché"); } },
+      { label:"Tout décocher", icon:"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+        run:() => { L.setAll(false); this.app.store.save(); this.renderAll(); this.app.snack("Tout est décoché"); } },
+      { label:"Réinitialiser", sub:"Décoche tout et replie les sections",
+        icon:"M17.65 6.35A8 8 0 1 0 19.73 14h-2.08A6 6 0 1 1 12 6a5.9 5.9 0 0 1 4.22 1.78L13 11h7V4z",
+        run:() => this.reset() },
+      { divider:true },
+      { label:"Ajouter une section", icon:"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z",
+        run:() => this.addSection() },
+      { label:"Réorganiser les sections", icon:"M3 15h18v-2H3zm0 4h18v-2H3zM3 5v2h18V5z",
+        run:() => this.reorderSections() },
+      { label:"Mode " + (this.app.store.settings.compact ? "normal" : "compact"),
+        icon:"M4 18h17v-6H4zM4 5v6h17V5z",
+        run:() => { this.app.toggleCompact(); } },
+      { divider:true },
+      { label:"Exporter les objets cochés", sub:"JSON léger, pour préparer le retour",
+        icon:"M19 12v7H5v-7H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7zm-6 .67 2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z",
+        run:() => this.exportChecked() },
+      { label:"Exporter la checklist complète", sub:"Sections, ordre, objets, cases cochées",
+        icon:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z",
+        run:() => this.exportFull() },
+      { label:"Exporter en PDF", sub:"Objets cochés uniquement",
+        icon:"M19 8H5a3 3 0 0 0-3 3v6h4v4h12v-4h4v-6a3 3 0 0 0-3-3m-3 11H8v-5h8zm3-7a1 1 0 1 1 1-1 1 1 0 0 1-1 1m-1-9H6v4h12z",
+        run:() => Exporter.printChecked(L) },
+      { divider:true },
+      { label:"Importer des objets cochés", sub:"Coche automatiquement les correspondances",
+        icon:"M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z",
+        run:() => this.importChecked() },
+      { label:"Importer une checklist", sub:"Ajoute une nouvelle checklist",
+        icon:"M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2m-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3z",
+        run:() => this.importChecklist() }
+    ]);
+  }
+
+  reset(){
+    const go = () => {
+      this.list.setAll(false);
+      this.list.sections.forEach(s => s.collapsed = false);
+      this.app.store.save();
+      this.renderAll();
+      this.app.snack("Checklist réinitialisée");
+    };
+    if(this.app.store.settings.confirmReset){
+      this.app.ui.confirm("Réinitialiser la checklist ?",
+        "Les " + this.list.done + " objets cochés seront décochés.",
+        "Réinitialiser", go, true);
+    } else go();
+  }
+
+  exportChecked(){
+    const data = Exporter.checkedJSON(this.list);
+    if(!data.items.length){ this.app.snack("Aucun objet coché à exporter"); return; }
+    Utils.download(Utils.slug(this.list.name) + "-" + data.date + ".json",
+                   JSON.stringify(data, null, 1));
+    this.app.snack(data.items.length + " objets exportés");
+  }
+
+  exportFull(){
+    Utils.download(Utils.slug(this.list.name) + "-complete-" + Utils.today() + ".json",
+                   JSON.stringify(Exporter.fullJSON(this.list), null, 1));
+    this.app.snack("Checklist exportée");
+  }
+
+  importChecked(){
+    this.app.pickFile(text => {
+      const parsed = Importer.parse(text);
+      if(!parsed){ this.app.snack("Fichier JSON illisible"); return; }
+
+      let names = null;
+      if(parsed.kind === "checked") names = parsed.data.items;
+      else if(parsed.kind === "checklist"){
+        // Une checklist complète peut aussi servir de source de cases cochées.
+        names = [];
+        (parsed.data.sections || []).forEach(s =>
+          (s.items || []).forEach(i => { if(i.checked) names.push(i.name); }));
+      }
+      if(!names){ this.app.snack("Ce fichier ne contient pas d'objets cochés"); return; }
+
+      const hits = Importer.applyChecked(this.list, names);
+      this.app.store.save();
+      this.renderAll();
+      this.app.snack(hits + " objet(s) cochés sur " + names.length + " importés");
+    });
+  }
+
+  importChecklist(){
+    this.app.pickFile(text => {
+      const parsed = Importer.parse(text);
+      if(!parsed || parsed.kind !== "checklist"){
+        this.app.snack("Ce fichier n'est pas une checklist complète");
+        return;
+      }
+      const c = Checklist.fromJSON(parsed.data);
+      c.id = Utils.uid();
+      c.sections.forEach(s => { s.id = Utils.uid(); s.items.forEach(i => i.id = Utils.uid()); });
+      this.app.store.add(c);
+      this.app.home.render();
+      this.app.openChecklist(c.id);
+      this.app.snack("Checklist importée");
+    });
+  }
+}
+
+/* =========================================================================
+   ÉCRAN PARAMÈTRES
+   ========================================================================= */
+class SettingsView{
+  constructor(app){
+    this.app = app;
+    this.el = {
+      theme:   document.getElementById("set-theme"),
+      compact: document.getElementById("set-compact"),
+      check:   document.getElementById("set-check-size"),
+      text:    document.getElementById("set-text-size"),
+      cDelete: document.getElementById("set-confirm-delete"),
+      cReset:  document.getElementById("set-confirm-reset"),
+      openLast:document.getElementById("set-open-last"),
+      install: document.getElementById("set-install")
+    };
+    this._bind();
+  }
+
+  _bind(){
+    document.getElementById("btn-settings-back")
+      .addEventListener("click", () => this.app.showHome());
+
+    const s = () => this.app.store.settings;
+
+    this._switch(this.el.theme,    () => s().theme === "dark",
+      v => { s().theme = v ? "dark" : "light"; this.app.applySettings(); });
+    this._switch(this.el.compact,  () => s().compact,
+      v => { s().compact = v; this.app.applySettings(); });
+    this._switch(this.el.cDelete,  () => s().confirmDelete, v => { s().confirmDelete = v; });
+    this._switch(this.el.cReset,   () => s().confirmReset,  v => { s().confirmReset  = v; });
+    this._switch(this.el.openLast, () => s().openLast,      v => { s().openLast      = v; });
+
+    this._segmented(this.el.check, v => { s().checkSize = v; this.app.applySettings(); });
+    this._segmented(this.el.text,  v => { s().textSize  = v; this.app.applySettings(); });
+
+    document.getElementById("set-export-all").addEventListener("click", () => {
+      Utils.download("valise-sauvegarde-" + Utils.today() + ".json",
+                     JSON.stringify(Exporter.backupJSON(this.app.store), null, 1));
+      this.app.snack("Sauvegarde exportée");
+    });
+
+    document.getElementById("set-import-all").addEventListener("click", () => {
+      this.app.pickFile(text => {
+        const parsed = Importer.parse(text);
+        if(!parsed || parsed.kind !== "backup"){
+          this.app.snack("Ce fichier n'est pas une sauvegarde complète");
+          return;
+        }
+        this.app.ui.confirm("Remplacer toutes les données ?",
+          "Les checklists actuelles seront écrasées par celles de la sauvegarde.",
+          "Remplacer", () => {
+            const lists = (parsed.data.checklists || []).map(Checklist.fromJSON);
+            this.app.store.replaceAll(lists);
+            if(parsed.data.settings){
+              const keep = this.app.store.settings.lastListId;
+              this.app.store.settings = new Settings(parsed.data.settings);
+              this.app.store.settings.lastListId = keep;
+              this.app.store.save();
+            }
+            this.app.applySettings();
+            this.render();
+            this.app.home.render();
+            this.app.snack(lists.length + " checklists importées");
+          }, true);
+      });
+    });
+
+    // Copie de la sauvegarde dans le presse-papiers : aucun fichier à gérer,
+    // utile quand le stockage local n'est pas fiable.
+    document.getElementById("set-copy").addEventListener("click", () => {
+      const text = JSON.stringify(Exporter.backupJSON(this.app.store));
+      const done = () => this.app.snack("Données copiées — collez-les quelque part de sûr");
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, () => this.app.fallbackCopy(text, done));
+      } else {
+        this.app.fallbackCopy(text, done);
+      }
+    });
+
+    document.getElementById("set-paste").addEventListener("click", () => {
+      const apply = text => {
+        const parsed = Importer.parse(text);
+        if(!parsed || parsed.kind !== "backup"){
+          this.app.snack("Le presse-papiers ne contient pas de sauvegarde");
+          return;
+        }
+        this.app.ui.confirm("Remplacer toutes les données ?",
+          "Les checklists actuelles seront écrasées par celles du presse-papiers.",
+          "Remplacer", () => {
+            this.app.store.replaceAll((parsed.data.checklists || []).map(Checklist.fromJSON));
+            this.render();
+            this.app.home.render();
+            this.app.showHome();
+            this.app.snack("Données restaurées");
+          }, true);
+      };
+      if(navigator.clipboard && navigator.clipboard.readText){
+        navigator.clipboard.readText().then(apply,
+          () => this.app.askPaste(apply));
+      } else {
+        this.app.askPaste(apply);
+      }
+    });
+
+    document.getElementById("set-wipe").addEventListener("click", () => {
+      this.app.ui.confirm("Effacer toutes les données ?",
+        "Toutes les checklists reviendront à leur état d'origine. Pensez à exporter une sauvegarde avant.",
+        "Effacer", () => {
+          this.app.store.wipe();
+          this.app.applySettings();
+          this.render();
+          this.app.home.render();
+          this.app.showHome();
+          this.app.snack("Données effacées");
+        }, true);
+    });
+
+    this.el.install.addEventListener("click", () => this.app.promptInstall());
+  }
+
+  /** Câble un interrupteur : lecture d'état + bascule. */
+  _switch(el, get, set){
+    el.addEventListener("click", () => {
+      const next = !get();
+      set(next);
+      el.setAttribute("aria-checked", String(next));
+      this.app.store.save();
+    });
+  }
+
+  /** Câble un sélecteur segmenté (S / M / L). */
+  _segmented(group, set){
+    group.addEventListener("click", e => {
+      const btn = e.target.closest("button");
+      if(!btn) return;
+      group.querySelectorAll("button").forEach(b =>
+        b.setAttribute("aria-pressed", String(b === btn)));
+      set(btn.dataset.v);
+      this.app.store.save();
+    });
+  }
+
+  /** Reflète les préférences enregistrées dans les contrôles. */
+  render(){
+    const s = this.app.store.settings;
+    this.el.theme.setAttribute("aria-checked",    String(s.theme === "dark"));
+    this.el.compact.setAttribute("aria-checked",  String(s.compact));
+    this.el.cDelete.setAttribute("aria-checked",  String(s.confirmDelete));
+    this.el.cReset.setAttribute("aria-checked",   String(s.confirmReset));
+    this.el.openLast.setAttribute("aria-checked", String(s.openLast));
+    this.el.check.querySelectorAll("button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.v === s.checkSize)));
+    this.el.text.querySelectorAll("button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.v === s.textSize)));
+  }
+
+  showInstallButton(){ this.el.install.style.display = "flex"; }
+  hideInstallButton(){ this.el.install.style.display = "none"; }
+}
+
+/* =========================================================================
+   APPLICATION  (navigation, préférences appliquées, cycle de vie)
+   ========================================================================= */
+class App{
+  constructor(){
+    App.instance   = this;
+    this.store     = new Store("valise.v1");
+    this.ui        = new UI();
+    this.fileInput = document.getElementById("file-input");
+    this._fileCb   = null;
+    this._install  = null;   // évènement beforeinstallprompt mémorisé
+    this.screen    = "home";
+
+    this.store.load();
+
+    this.home     = new HomeView(this);
+    this.list     = new ChecklistView(this);
+    this.settings = new SettingsView(this);
+
+    this._bindFileInput();
+    this._bindHistory();
+    this.applySettings();
+    this.settings.render();
+    this.home.render();
+    this._openInitialScreen();
+    this._setupPWA();
+    this._checkStorage();
+  }
+
+  /* ---------- Diagnostic du stockage ---------- */
+  _checkStorage(){
+    StorageProbe.requestPersistence();
+    const r = StorageProbe.check(this.store.hadData);
+    if(r.level === "ok") return;
+
+    const bar = document.getElementById("storage-warning");
+    document.getElementById("warn-title").textContent = r.title;
+    document.getElementById("warn-text").textContent  = r.text;
+
+    const btn = document.getElementById("warn-action");
+    if(r.level === "fail"){
+      // Alerte définitive : le bouton met les données à l'abri.
+      btn.textContent = "Copier";
+      btn.addEventListener("click", () => {
+        const text = JSON.stringify(Exporter.backupJSON(this.store));
+        const done = () => this.snack("Données copiées");
+        if(navigator.clipboard && navigator.clipboard.writeText)
+          navigator.clipboard.writeText(text).then(done, () => this.fallbackCopy(text, done));
+        else this.fallbackCopy(text, done);
+      });
+    } else {
+      // Simple avertissement : masquable.
+      btn.textContent = "Compris";
+      btn.addEventListener("click", () => {
+        bar.classList.remove("show");
+        document.body.classList.remove("has-warning");
+      });
+    }
+    bar.classList.add("show");
+    document.body.classList.add("has-warning");
+  }
+
+  /** Copie sans l'API presse-papiers (contextes non sécurisés). */
+  fallbackCopy(text, done){
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:-1000px;left:0;opacity:0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    let ok = false;
+    try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+    document.body.removeChild(ta);
+    if(ok) done(); else this.snack("Copie refusée par le navigateur");
+  }
+
+  /** Saisie manuelle quand la lecture du presse-papiers est refusée. */
+  askPaste(apply){
+    this.ui.form("Coller la sauvegarde", [
+      { key:"json", label:"Collez ici le contenu copié", value:"", placeholder:"{\"format\":\"valise.backup\"…" }
+    ], "Restaurer", v => {
+      if(!v.json){ this.snack("Rien à restaurer"); return; }
+      apply(v.json);
+    });
+  }
+
+  /* ---------- Navigation ---------- */
+  _show(id){
+    document.querySelectorAll(".screen").forEach(s =>
+      s.classList.toggle("active", s.id === id));
+    document.querySelector("#" + id + " .content").scrollTop = 0;
+  }
+
+  showHome(){
+    this.screen = "home";
+    this.home.render();
+    this._show("screen-home");
+  }
+
+  openChecklist(id){
+    const list = this.store.find(id);
+    if(!list){ this.showHome(); return; }
+    this.screen = "list";
+    this.store.settings.lastListId = id;
+    this.store.save();
+    this.list.open(list);
+    this._show("screen-list");
+    history.pushState({ screen:"list", id:id }, "");
+  }
+
+  showSettings(){
+    this.screen = "settings";
+    this.settings.render();
+    this._show("screen-settings");
+    history.pushState({ screen:"settings" }, "");
+  }
+
+  /** Au démarrage : dernière checklist utilisée si la préférence est active. */
+  _openInitialScreen(){
+    const s = this.store.settings;
+    if(s.openLast && s.lastListId && this.store.find(s.lastListId)){
+      this.list.open(this.store.find(s.lastListId));
+      this.screen = "list";
+      this._show("screen-list");
+    } else {
+      this._show("screen-home");
+    }
+  }
+
+  /** La touche Retour d'Android ferme les modales puis revient à l'accueil. */
+  _bindHistory(){
+    history.replaceState({ screen:"home" }, "");
+    window.addEventListener("popstate", () => {
+      if(this.ui.isOpen()){
+        this.ui.close();
+        history.pushState({ screen:this.screen }, "");
+        return;
+      }
+      if(this.screen !== "home") this.showHome();
+    });
+  }
+
+  /* ---------- Préférences appliquées à l'interface ---------- */
+  applySettings(){
+    const s = this.store.settings;
+    const root = document.documentElement;
+
+    root.setAttribute("data-theme", s.theme === "light" ? "light" : "dark");
+    document.body.classList.toggle("compact", s.compact);
+
+    const checks = { s:"24px", m:"30px", l:"38px" };
+    const texts  = { s:"0.9",  m:"1",    l:"1.15" };
+    root.style.setProperty("--check-size", checks[s.checkSize] || checks.m);
+    root.style.setProperty("--font-scale", texts[s.textSize]   || texts.m);
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if(meta) meta.setAttribute("content", s.theme === "light" ? "#F3EDF7" : "#141218");
+
+    this.store.save();
+  }
+
+  toggleCompact(){
+    this.store.settings.compact = !this.store.settings.compact;
+    this.applySettings();
+    this.settings.render();
+    this.snack("Mode " + (this.store.settings.compact ? "compact" : "normal"));
+  }
+
+  /* ---------- Sélection de fichier partagée ---------- */
+  _bindFileInput(){
+    this.fileInput.addEventListener("change", () => {
+      const file = this.fileInput.files && this.fileInput.files[0];
+      if(!file || !this._fileCb){ this.fileInput.value = ""; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const cb = this._fileCb;
+        this._fileCb = null;
+        this.fileInput.value = "";
+        cb(String(reader.result));
+      };
+      reader.onerror = () => {
+        this._fileCb = null;
+        this.fileInput.value = "";
+        this.snack("Lecture du fichier impossible");
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  /** Ouvre le sélecteur de fichier et transmet le texte lu. */
+  pickFile(callback){
+    this._fileCb = callback;
+    this.fileInput.click();
+  }
+
+  snack(msg){ this.ui.snack(msg); }
+
+  /* ---------- Installation sur l'écran d'accueil ---------- */
+  _setupPWA(){
+    // Manifeste généré à la volée : aucun fichier annexe n'est nécessaire.
+    try{
+      const icon = App._icon(512);
+      const manifest = {
+        name:"Valise", short_name:"Valise",
+        start_url:".", scope:".",
+        display:"standalone", orientation:"portrait",
+        background_color:"#141218", theme_color:"#141218",
+        icons:[
+          { src:icon, sizes:"512x512", type:"image/png", purpose:"any" },
+          { src:icon, sizes:"512x512", type:"image/png", purpose:"maskable" }
+        ]
+      };
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = "data:application/manifest+json," + encodeURIComponent(JSON.stringify(manifest));
+      document.head.appendChild(link);
+
+      const apple = document.createElement("link");
+      apple.rel = "apple-touch-icon";
+      apple.href = icon;
+      document.head.appendChild(apple);
+    }catch(e){ /* environnement sans canvas : sans conséquence */ }
+
+    // Service worker : présent uniquement en hébergement http/https (GitHub Pages
+    // par exemple). En ouverture de fichier local, l'enregistrement est impossible
+    // et sans conséquence — la page est déjà entièrement autonome.
+    if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
+      navigator.serviceWorker.register("sw.js").catch(() => { /* sw.js absent */ });
+    }
+
+    window.addEventListener("beforeinstallprompt", e => {
+      e.preventDefault();
+      this._install = e;
+      this.settings.showInstallButton();
+    });
+    window.addEventListener("appinstalled", () => {
+      this._install = null;
+      this.settings.hideInstallButton();
+    });
+  }
+
+  promptInstall(){
+    if(!this._install){
+      this.snack("Utilisez le menu du navigateur : Ajouter à l'écran d'accueil");
+      return;
+    }
+    this._install.prompt();
+    this._install = null;
+    this.settings.hideInstallButton();
+  }
+
+  /** Icône dessinée sur un canvas, encodée en PNG (aucun fichier image externe). */
+  static _icon(size){
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const g = c.getContext("2d");
+    const r = size * 0.22;
+
+    g.fillStyle = "#4F378B";
+    g.beginPath();
+    g.moveTo(r,0); g.lineTo(size-r,0); g.quadraticCurveTo(size,0,size,r);
+    g.lineTo(size,size-r); g.quadraticCurveTo(size,size,size-r,size);
+    g.lineTo(r,size); g.quadraticCurveTo(0,size,0,size-r);
+    g.lineTo(0,r); g.quadraticCurveTo(0,0,r,0);
+    g.closePath(); g.fill();
+
+    g.strokeStyle = "#D0BCFF";
+    g.lineWidth   = size * 0.09;
+    g.lineCap = g.lineJoin = "round";
+    g.beginPath();
+    g.moveTo(size*0.27, size*0.52);
+    g.lineTo(size*0.44, size*0.70);
+    g.lineTo(size*0.75, size*0.31);
+    g.stroke();
+
+    return c.toDataURL("image/png");
+  }
+}
+
+/* =========================================================================
+   DÉMARRAGE
+   ========================================================================= */
+document.addEventListener("DOMContentLoaded", () => { new App(); });
+
+})();
+</script>
+</body>
+</html>
